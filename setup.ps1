@@ -1,12 +1,6 @@
 # ── Config ────────────────────────────────────────────────────────────────────
-$repoBase = "https://github.com/kawtu/hostfile/main"
-
-$scriptList = @(
-    # "scripts/0.ps1",
-    # "scripts/1.ps1",
-    # "scripts/2.ps1",
-    # "scripts/3.ps1"
-)
+$repoBase = "https://raw.githubusercontent.com/kawtu/hostfile/main"
+$repoApi  = "https://api.github.com/repos/kawtu/hostfile/contents/scripts"
 
 $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 # ──────────────────────────────────────────────────────────────────────────────
@@ -39,30 +33,36 @@ if (-not (Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir | O
 $env:SETUP_WORKDIR = $workDir
 Write-Host "[Directory]: $workDir" -ForegroundColor Gray
 
+Write-Host "`n[Fetch] fetching list from GitHub..." -ForegroundColor Cyan
+try {
+    $files = Invoke-RestMethod -Uri $repoApi -Headers @{ "User-Agent" = "setup-script" }
+    $scriptList = $files |
+        Where-Object { $_.type -eq "file" -and $_.name -like "*.ps1" } |
+        Sort-Object { $_.name } |
+        ForEach-Object { "scripts/$($_.name)" }
+
+    Write-Host "[Fetch] retrieved $($scriptList.Count) scripts to run:" -ForegroundColor Gray
+    $scriptList | ForEach-Object { Write-Host "  - $_" -ForegroundColor Gray }
+} catch {
+    Write-Error "[Fetch] failed to fetch script list from GitHub: $_"
+    exit 1
+}
+
 foreach ($script in $scriptList) {
     $scriptName = Split-Path $script -Leaf
     $url        = "$repoBase/$script"
     $tmpFile    = Join-Path $workDir $scriptName
-
     Write-Host "[Execution]: executing $script" -ForegroundColor Yellow
-
     try {
         Invoke-RestMethod -Uri $url -OutFile $tmpFile
-
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmpFile
-
         if ($LASTEXITCODE -eq 0) {
             Write-Host "[Execution]: script $script was a success.`n" -ForegroundColor Green
-        } else {
-            Write-Warning "[Execution]: script $script exited with code $LASTEXITCODE"
-        }
+        } else {Write-Warning "[Execution]: script $script exited with code $LASTEXITCODE"}
     }
-    catch {
-        Write-Error "[Execution] script $script failed to execute, error: $_"
-    }
-    finally {
-        if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }
-    }
+    catch {Write-Error "[Execution] script $script failed to execute, error: $_"}
+    finally {if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }}
 }
 
-Write-Host "`n[Message] host has tricked" -ForegroundColor Cyan
+Write-Host "`n[Message] patch planted" -ForegroundColor Cyan
+Pause
