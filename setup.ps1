@@ -45,6 +45,7 @@ try {
     $scriptList | ForEach-Object { Write-Host "  - $_" -ForegroundColor Gray }
 } catch {
     Write-Error "[Fetch] failed to fetch script list from GitHub: $_"
+    Pause
     exit 1
 }
 
@@ -65,4 +66,7 @@ foreach ($script in $scriptList) {
 }
 
 Write-Host "`n[Message] patch planted" -ForegroundColor Cyan
+
 Pause
+Remove-Item -Path $workDir -Recurse -Force
+Exit
