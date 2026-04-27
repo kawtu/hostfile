@@ -4,7 +4,7 @@ $isAlone = [string]::IsNullOrWhiteSpace($env:SETUP_WORKDIR)
 if (-not $isAdmin) {
     Write-Warning "no administrator privileges detected, self-elevating..."
     $elevateCmd = "irm https://raw.githubusercontent.com/ketw/hostfile/main/scripts/0.ps1 | iex"
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs; Exit;
+    Start-Process powershell.exe "-NoProfile -NoExit -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs;
 }
 if ($isAlone) {
     Write-Host "[0.ps1:SCRIPT] running solo..." -ForegroundColor Cyan
