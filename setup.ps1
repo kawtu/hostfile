@@ -29,12 +29,14 @@ do {
 } while ([string]::IsNullOrWhiteSpace($inputUrl))
 if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
 $env:TARGET_URL = $inputUrl
-Write-Host "`n[setup.ps1:SYSTEM@target] set to $($env:TARGET_URL)" -ForegroundColor Green
+Write-Host "[setup.ps1:SYSTEM@target] set to $($env:TARGET_URL)" -ForegroundColor Green
 
 $workDir = Join-Path $env:TEMP "setup_workspace"
 if (-not (Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir | Out-Null }
 $env:SETUP_WORKDIR = $workDir
 Write-Host "[setup.ps1:SYSTEM@dir]: $workDir" -ForegroundColor Gray
+
+Write-Host "`n"
 
 $httrackInstallDir  = "C:\Program Files\WinHTTrack"
 $env:HTTRACK_EXE    = ""
@@ -91,6 +93,8 @@ if (-not $XamppInstallDir) {
 }
 Write-Host "[setup.ps1:XAMPP] found xampp: $XamppInstallDir" -ForegroundColor Green
 
+Write-Host "`n"
+
 Write-Host "[Fetch] fetching list from GitHub..." -ForegroundColor Cyan
 try {
     $files = Invoke-RestMethod -Uri $repoApi -Headers @{ "User-Agent" = "setup-script" }
@@ -106,19 +110,21 @@ foreach ($script in $scriptList) {
     $scriptName = Split-Path $script -Leaf
     $url        = "$repoBase/$script"
     $tmpFile    = Join-Path $workDir $scriptName
-    Write-Host "[Execution]: executing $script" -ForegroundColor Yellow
+    Write-Host "`n"; Write-Host "[Execution]: executing $script" -ForegroundColor Yellow;
     try {
-        Write-Host "`n────────────────────────────────────────────────────"
+        Write-Host "────────────────────────────────────────────────────"
         Invoke-RestMethod -Uri $url -OutFile $tmpFile
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmpFile
-        Write-Host "────────────────────────────────────────────────────`n"
+        Write-Host "────────────────────────────────────────────────────"
         if ($LASTEXITCODE -eq 0) {
             Write-Host "[Execution]: script $script was a success." -ForegroundColor Green
-        } else {Write-Warning "[Execution]: script $script exited with code $LASTEXITCODE"}
+        } else {Write-Host "[Execution]: script $script exited with code $LASTEXITCODE" -ForegroundColor Red}
     }
     catch { Write-Host "[Execution] script $script failed to execute, error: $_" -ForegroundColor Red }
     finally {if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }}
 }
+
+Write-Host "`n"
 
 Write-Host "[Message] patch planted" -ForegroundColor Cyan
 Pause; Remove-Item -Path $workDir -Recurse -Force; Exit;

@@ -20,7 +20,7 @@ if (Test-Path $httrackExe) {
     Write-Host "[1.ps1:HTTRACK-config] action 'Download web site(s)'" -ForegroundColor Cyan
     if (-not (Test-Path $outputFolder)) { New-Item -ItemType Directory -Path $outputFolder | Out-Null }
     Write-Host "[1.ps1:HTTRACK-mirror] starting mirror" -ForegroundColor Yellow
-    $arguments = @($url, "-O", $outputFolder, "-w") & $httrackExe $arguments
+    $arguments = @($url, "-O", $outputFolder, "-w"); & $httrackExe $arguments;
     Write-Host "[1.ps1:HTTRACK-mirror] mirror complete" -ForegroundColor Green
     
     Write-Host "[1.ps1:XAMPP-extract] converting mirror into webapp" -ForegroundColor Yellow
