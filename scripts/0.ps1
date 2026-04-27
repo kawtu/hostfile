@@ -6,7 +6,7 @@ if (-not $isAdmin) {
     if ($PSCommandPath) {
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     } else {
-        $elevateCmd = "irm https://raw.githubusercontent.com/ketw/hostfile/main/scripts/0.ps1 | iex"
+        $elevateCmd = "irm https://raw.githubusercontent.com/ketw/hostnet/main/scripts/0.ps1 | iex"
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs
     }; Exit;
 }
