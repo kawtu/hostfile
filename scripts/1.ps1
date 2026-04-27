@@ -5,6 +5,9 @@ $XamppInstallDir = $env:XAMPP_DIR
 $httrackExe = $env:HTTRACK_EXE
 $url = $env:TARGET_URL
 
+$HtdocsPath = Join-Path -Path $XamppInstallDir -ChildPath "htdocs"
+$HtdocsDestinationPath = Join-Path -Path $HtdocsPath -ChildPath "webapp"
+
 $baseDomain = $url -replace '^https?://', '' -replace '^www\.', '' -split '/' | Select-Object -First 1
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -38,5 +41,14 @@ if (Test-Path $httrackExe) {
         Copy-Item -Path "$innerSourcePath\*" -Destination $destinationPath -Recurse -Force
         Write-Host "[1.ps1:XAMPP-extract] extraction complete." -ForegroundColor Green
     } else { Write-Host "[1.ps1:XAMPP-fetch] could not locate the directory: $baseDomain" -ForegroundColor Yellow; Exit 1; }
+    if (Test-Path $destinationPath) {
+        if (Test-Path $HtdocsPath) {
+            Write-Host "[1.ps1:XAMPP-deploy] deployment target: $HtdocsDestinationPath." -ForegroundColor Cyan
+            if (Test-Path $HtdocsDestinationPath) { Remove-Item -Path $HtdocsDestinationPath -Recurse -Force }
+            Write-Host "[1.ps1:XAMPP-deploy] deploying..." -ForegroundColor Yellow
+            Copy-Item -Path $destinationPath -Destination $HtdocsDestinationPath -Recurse -Force
+            Write-Host "[1.ps1:XAMPP-deploy] deployed successfully." -ForegroundColor Green
+        } else { Write-Host "[1.ps1:XAMPP-fetch] could not locate htdocs: $HtdocsPath" -ForegroundColor Red; Exit 1; }
+    } else { Write-Host "[1.ps1:XAMPP-fetch] could not locate source: $destinationPath" -ForegroundColor Red; Exit 1; }
 }
 else { Write-Host "[1.ps1:HTTRACK-install] could not locate exe at $httrackExe" -ForegroundColor Red; Exit 1; }
