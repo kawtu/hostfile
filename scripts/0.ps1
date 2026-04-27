@@ -1,60 +1,61 @@
-function InvokeChk {
-    $uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-    $isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
-    $isAlone = [string]::IsNullOrWhiteSpace($env:SETUP_WORKDIR)
-    if (-not $isAdmin) {
-        Write-Warning "no administrator privileges detected, self-elevating..."
+$uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+$isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+$isAlone = [string]::IsNullOrWhiteSpace($env:SETUP_WORKDIR)
+if (-not $isAdmin) {
+    Write-Warning "no administrator privileges detected, self-elevating..."
+    if ($PSCommandPath) {
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+    } else {
         $elevateCmd = "irm https://raw.githubusercontent.com/ketw/hostfile/main/scripts/0.ps1 | iex"
-        Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs; return;
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs
+    } Exit
+}
+if ($isAlone) {
+    Write-Host "[0.ps1:SCRIPT] running solo..." -ForegroundColor Cyan
+
+    Write-Host "[0.ps1:SCRIPT] URL required, please provide a URL that you wish to sanitize."
+    do {
+        $inputUrl = Read-Host "[0.ps1:SYSTEM-input] target URL (e.g. https://example.com/path)"
+        $inputUrl = $inputUrl.Trim()
+        if ([string]::IsNullOrWhiteSpace($inputUrl)) {
+            Write-Host "[Input-Warning] target URL cannot be empty." -ForegroundColor Yellow
+        }
+    } while ([string]::IsNullOrWhiteSpace($inputUrl))
+    if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
+    Write-Host ""; $env:TARGET_URL = $inputUrl;
+    Write-Host "[0.ps1:SYSTEM@target] set to $inputUrl" -ForegroundColor Green
+
+    $RegistryPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\xampp"
+    )
+    $XamppInstallDir    = $null
+    $env:XAMPP_DIR      = $null
+    Write-Host "[0.ps1:XAMPP-locate] finding xampp..."
+    foreach ($path in $RegistryPaths) {
+        if (Test-Path $path) {
+            $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation;
+            if ($XamppInstallDir) { break } }
     }
-    if ($isAlone) {
-        Write-Host "[0.ps1:SCRIPT] running solo..." -ForegroundColor Cyan
-
-        Write-Host "[0.ps1:SCRIPT] URL required, please provide a URL that you wish to sanitize."
-        do {
-            $inputUrl = Read-Host "[0.ps1:SYSTEM-input] target URL (e.g. https://example.com/path)"
-            $inputUrl = $inputUrl.Trim()
-            if ([string]::IsNullOrWhiteSpace($inputUrl)) {
-                Write-Host "[Input-Warning] target URL cannot be empty." -ForegroundColor Yellow
-            }
-        } while ([string]::IsNullOrWhiteSpace($inputUrl))
-        if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
-        Write-Host ""; $env:TARGET_URL = $inputUrl;
-        Write-Host "[0.ps1:SYSTEM@target] set to $inputUrl" -ForegroundColor Green
-
-        $RegistryPaths = @(
-            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
-            "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\xampp"
-        )
-        $XamppInstallDir    = $null
-        $env:XAMPP_DIR      = $null
-        Write-Host "[0.ps1:XAMPP-locate] finding xampp..."
-        foreach ($path in $RegistryPaths) {
-            if (Test-Path $path) {
-                $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation;
-                if ($XamppInstallDir) { break } }
+    if (-not $XamppInstallDir) {
+        $Drives = Get-PSDrive -PSProvider FileSystem
+        foreach ($Drive in $Drives) {
+            $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
+            if (Test-Path "$PotentialPath\xampp-control.exe")
+            { $XamppInstallDir = $PotentialPath; break; }
         }
-        if (-not $XamppInstallDir) {
-            $Drives = Get-PSDrive -PSProvider FileSystem
-            foreach ($Drive in $Drives) {
-                $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
-                if (Test-Path "$PotentialPath\xampp-control.exe")
-                { $XamppInstallDir = $PotentialPath; break; }
-            }
-        }
-        if (-not $XamppInstallDir) {
-            Write-Host "[0.ps1:XAMPP-locate] could not locate xampp, setting to null" -ForegroundColor Yellow
-            $env:XAMPP_DIR = $null
-        } else {
-            $env:XAMPP_DIR = $XamppInstallDir
-            Write-Host "[0.ps1:XAMPP-locate] found xampp: $XamppInstallDir" -ForegroundColor Green
-        }
+    }
+    if (-not $XamppInstallDir) {
+        Write-Host "[0.ps1:XAMPP-locate] could not locate xampp, setting to null" -ForegroundColor Yellow
+        $env:XAMPP_DIR = $null
+    } else {
+        $env:XAMPP_DIR = $XamppInstallDir
+        Write-Host "[0.ps1:XAMPP-locate] found xampp: $XamppInstallDir" -ForegroundColor Green
     }
 }
 
 # ── Variables ─────────────────────────────────────────────────────────────────
 $PSScriptRoot = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
-InvokeChk
 
 $customDomain  = $env:TARGET_URL -replace '^https?://', '' -replace '/$', ''
 $cleanHostname = $customDomain -split '/' | Select-Object -First 1
