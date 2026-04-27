@@ -50,3 +50,43 @@ foreach ($entry in $entries) {
         }
     } else { Write-Host "[2.ps1:HOST-skip] $domainOnly is already in the host file." -ForegroundColor Yellow; }
 }
+
+$httpdConfPath = "$apachePath\conf\httpd.conf"
+if (Test-Path $httpdConfPath) {
+    Write-Host "[2.ps1:APACHE-httpd] ensuring vhosts is enabled..." -ForegroundColor Yellow
+    (Get-Content $httpdConfPath) -replace "^#\s*(Include conf/extra/httpd-vhosts.conf)", "`$1" | Set-Content $httpdConfPath
+    Write-Host "[2.ps1:APACHE-httpd] vhosts are enabled." -ForegroundColor Green
+}
+
+$vhostsPath = "$apachePath\conf\extra\httpd-vhosts.conf"
+$localhostFallback = @"
+<VirtualHost *:80>
+    DocumentRoot `"$htdocsPath`"
+    ServerName localhost
+</VirtualHost>
+"@
+$vhostConfig = @"
+
+# Custom Domain Automator: $baseDomain
+<VirtualHost *:80>
+    DocumentRoot `"$documentRoot`"
+    ServerName $baseDomain
+    ServerAlias $wwwDomain
+    <Directory `"$documentRoot`">
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>
+"@
+if (Test-Path $vhostsPath) {
+    Write-Host "[2.ps1:VHOST-add] adding fallback-config..." -ForegroundColor Yellow
+    if (!(Select-String -Path $vhostsPath -Pattern "ServerName localhost" -Quiet)) {
+        Add-Content -Path $vhostsPath -Value $localhostFallback
+    }
+    Write-Host "[2.ps1:VHOST-add] added fallback-config." -ForegroundColor Green
+    Write-Host "[2.ps1:VHOST-add] adding $baseDomain config..." -ForegroundColor Yellow
+    if (!(Select-String -Path $vhostsPath -Pattern "ServerName $baseDomain" -Quiet)) {
+        Add-Content -Path $vhostsPath -Value $vhostConfig
+        Write-Host "[2.ps1:VHOST-add] added $baseDomain (with www alias)." -ForegroundColor Green
+    } else { Write-Host "[2.ps1:VHOST-skip] vhost config for $baseDomain already exists." -ForegroundColor Yellow; }
+} else { Write-Host "[2.ps1:VHOST-error] could not locate httpd-vhosts.conf at: $vhostsPath" -ForegroundColor Red; Exit 1; }
