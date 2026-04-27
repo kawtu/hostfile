@@ -23,6 +23,16 @@ $Host.UI.RawUI.ForegroundColor = "White"
 Clear-Host
 
 Write-Host "`n[Message] Initializing..." -ForegroundColor Cyan
+do {
+    $inputUrl = Read-Host "[Input-Required] target URL (e.g. https://example.com/path)"
+    $inputUrl = $inputUrl.Trim()
+    if ([string]::IsNullOrWhiteSpace($inputUrl)) {
+        Write-Host "[Input-Warning] target URL cannot be empty." -ForegroundColor Yellow
+    }
+} while ([string]::IsNullOrWhiteSpace($inputUrl))
+if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
+$env:TARGET_URL = $inputUrl
+Write-Host "`n[Target] set to $($env:TARGET_URL)" -ForegroundColor Green
 
 $workDir = Join-Path $env:TEMP "setup_workspace"
 if (-not (Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir | Out-Null }
