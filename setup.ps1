@@ -2,10 +2,10 @@
 $repoBase = "https://github.com/kawtu/hostfile/main"
 
 $scriptList = @(
-    "scripts/0.ps1",
-    "scripts/1.ps1",
-    "scripts/2.ps1",
-    "scripts/3.ps1"
+    # "scripts/0.ps1",
+    # "scripts/1.ps1",
+    # "scripts/2.ps1",
+    # "scripts/3.ps1"
 )
 
 $elevateCmd = "irm $repoBase/setup.ps1 | iex"
