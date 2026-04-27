@@ -28,7 +28,7 @@ do {
     }
 } while ([string]::IsNullOrWhiteSpace($inputUrl))
 if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
-$env:TARGET_URL = $inputUrl
+Write-Host ""; $env:TARGET_URL = $inputUrl;
 Write-Host "[setup.ps1:SYSTEM@target] set to $($env:TARGET_URL)" -ForegroundColor Green
 
 $workDir = Join-Path $env:TEMP "setup_workspace"
@@ -36,7 +36,7 @@ if (-not (Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir | O
 $env:SETUP_WORKDIR = $workDir
 Write-Host "[setup.ps1:SYSTEM@dir]: $workDir" -ForegroundColor Gray
 
-Write-Host "`n"
+Write-Host ""
 
 $httrackInstallDir  = "C:\Program Files\WinHTTrack"
 $env:HTTRACK_EXE    = ""
@@ -79,6 +79,7 @@ if (-not $XamppInstallDir) {
 }
 if (-not $XamppInstallDir) {
     Write-Host "[setup.ps1:XAMPP-download] could not locate xampp, proceeding to download..." -ForegroundColor Yellow
+    $InstallerPath = Join-Path -Path $workDir -ChildPath "xampp-installer.exe"
     try {
         Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Cyan
         Invoke-WebRequest -Uri $XamppDownloadUrl -OutFile $InstallerPath -UserAgent "Mozilla/5.0" -ErrorAction Stop
@@ -87,13 +88,14 @@ if (-not $XamppInstallDir) {
         $process = Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended --launchapps 0" -Wait -PassThru
         $XamppInstallDir = "C:\xampp"
         $env:XAMPP_DIR = $XamppInstallDir
+        if ($null -ne $InstallerPath -and (Test-Path $InstallerPath)) { Remove-Item $InstallerPath -Force; }
     } catch { Write-Host "[setup.ps1:XAMPP-download] download failed: $($_.Exception.Message)" -ForegroundColor Red; Pause; Exit; }
 } else {
     $env:XAMPP_DIR = $XamppInstallDir
 }
 Write-Host "[setup.ps1:XAMPP] found xampp: $XamppInstallDir" -ForegroundColor Green
 
-Write-Host "`n"
+Write-Host ""
 
 Write-Host "[Fetch] fetching list from GitHub..." -ForegroundColor Cyan
 try {
@@ -110,21 +112,21 @@ foreach ($script in $scriptList) {
     $scriptName = Split-Path $script -Leaf
     $url        = "$repoBase/$script"
     $tmpFile    = Join-Path $workDir $scriptName
-    Write-Host "`n"; Write-Host "[Execution]: executing $script" -ForegroundColor Yellow;
+    Write-Host ""; Write-Host "[Execution]: executing $script" -ForegroundColor Yellow;
     try {
         Write-Host "────────────────────────────────────────────────────"
         Invoke-RestMethod -Uri $url -OutFile $tmpFile
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmpFile
         Write-Host "────────────────────────────────────────────────────"
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "[Execution]: script $script was a success." -ForegroundColor Green
-        } else {Write-Host "[Execution]: script $script exited with code $LASTEXITCODE" -ForegroundColor Red}
+            Write-Host "[Execution]: script '$script' was a success." -ForegroundColor Green
+        } else {Write-Host "[Execution]: script '$script' exited with code $LASTEXITCODE" -ForegroundColor Red}
     }
-    catch { Write-Host "[Execution] script $script failed to execute, error: $_" -ForegroundColor Red }
+    catch { Write-Host "[Execution] script '$script' failed to execute, error: $_" -ForegroundColor Red }
     finally {if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }}
 }
 
-Write-Host "`n"
+Write-Host ""
 
 Write-Host "[Message] patch planted" -ForegroundColor Cyan
 Pause; Remove-Item -Path $workDir -Recurse -Force; Exit;
