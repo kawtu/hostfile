@@ -8,17 +8,16 @@ $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
     Write-Warning "Administrator Privileges are required, elevating setup script..."
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs
-    exit
+    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs; exit;
 }
 
 $Host.UI.RawUI.BackgroundColor = "Black"
 $Host.UI.RawUI.ForegroundColor = "White"
 Clear-Host
 
-Write-Host "`n[Message] Initializing..." -ForegroundColor Cyan
+Write-Host "[Message] Initializing..." -ForegroundColor Cyan
 do {
-    $inputUrl = Read-Host "[Input-Required] target URL (e.g. https://example.com/path)"
+    $inputUrl = Read-Host "[setup.ps1:SYSTEM-input] target URL (e.g. https://example.com/path)"
     $inputUrl = $inputUrl.Trim()
     if ([string]::IsNullOrWhiteSpace($inputUrl)) {
         Write-Host "[Input-Warning] target URL cannot be empty." -ForegroundColor Yellow
@@ -26,28 +25,50 @@ do {
 } while ([string]::IsNullOrWhiteSpace($inputUrl))
 if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
 $env:TARGET_URL = $inputUrl
-Write-Host "`n[Target] set to $($env:TARGET_URL)" -ForegroundColor Green
+Write-Host "`n[setup.ps1:SYSTEM@target] set to $($env:TARGET_URL)" -ForegroundColor Green
 
 $workDir = Join-Path $env:TEMP "setup_workspace"
 if (-not (Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir | Out-Null }
 $env:SETUP_WORKDIR = $workDir
-Write-Host "[Directory]: $workDir" -ForegroundColor Gray
+Write-Host "[setup.ps1:SYSTEM@dir]: $workDir" -ForegroundColor Gray
 
-Write-Host "`n[Fetch] fetching list from GitHub..." -ForegroundColor Cyan
+$XamppInstallDir = $null
+$RegistryPaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\xampp"
+)
+Write-Host "[setup.ps1:XAMPP] finding xampp..."
+foreach ($path in $RegistryPaths) {
+    if (Test-Path $path) {
+        $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation;
+        if ($XamppInstallDir) { break } }
+}
+if (-not $XamppInstallDir) {
+    $Drives = Get-PSDrive -PSProvider FileSystem
+    foreach ($Drive in $Drives) {
+        $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
+        if (Test-Path "$PotentialPath\xampp-control.exe")
+        { $XamppInstallDir = $PotentialPath; break; }
+    }
+}
+if (-not $XamppInstallDir) {
+    Write-Error "[setup.ps1:XAMPP] could not locate xampp to perform sanity checks";
+    $env:XAMPP_DIR = ""
+} else {
+    $env:XAMPP_DIR = $XamppInstallDir
+    Write-Host "[setup.ps1:XAMPP] found xampp: $XamppInstallDir" -ForegroundColor Green
+}
+
+Write-Host "[Fetch] fetching list from GitHub..." -ForegroundColor Cyan
 try {
     $files = Invoke-RestMethod -Uri $repoApi -Headers @{ "User-Agent" = "setup-script" }
     $scriptList = $files |
         Where-Object { $_.type -eq "file" -and $_.name -like "*.ps1" } |
         Sort-Object { $_.name } |
         ForEach-Object { "scripts/$($_.name)" }
-
     Write-Host "[Fetch] retrieved $($scriptList.Count) scripts to run:" -ForegroundColor Gray
     $scriptList | ForEach-Object { Write-Host "  - $_" -ForegroundColor Gray }
-} catch {
-    Write-Error "[Fetch] failed to fetch script list from GitHub: $_"
-    Pause
-    exit 1
-}
+} catch { Write-Error "[Fetch] failed to fetch script list from GitHub: $_" Pause; exit 1; }
 
 foreach ($script in $scriptList) {
     $scriptName = Split-Path $script -Leaf
@@ -55,18 +76,17 @@ foreach ($script in $scriptList) {
     $tmpFile    = Join-Path $workDir $scriptName
     Write-Host "[Execution]: executing $script" -ForegroundColor Yellow
     try {
+        Write-Host "`n────────────────────────────────────────────────────"
         Invoke-RestMethod -Uri $url -OutFile $tmpFile
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmpFile
+        Write-Host "────────────────────────────────────────────────────`n"
         if ($LASTEXITCODE -eq 0) {
-            Write-Host "[Execution]: script $script was a success.`n" -ForegroundColor Green
+            Write-Host "[Execution]: script $script was a success." -ForegroundColor Green
         } else {Write-Warning "[Execution]: script $script exited with code $LASTEXITCODE"}
     }
     catch {Write-Error "[Execution] script $script failed to execute, error: $_"}
     finally {if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }}
 }
 
-Write-Host "`n[Message] patch planted" -ForegroundColor Cyan
-
-Pause
-Remove-Item -Path $workDir -Recurse -Force
-Exit
+Write-Host "[Message] patch planted" -ForegroundColor Cyan
+Pause; Remove-Item -Path $workDir -Recurse -Force; Exit;
