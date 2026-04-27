@@ -1,32 +1,13 @@
+# ── Variables ─────────────────────────────────────────────────────────────────
 $PSScriptRoot = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
 
-# ── Config ────────────────────────────────────────────────────────────────────
 $customDomain  = $env:TARGET_URL -replace '^https?://', '' -replace '/$', ''
 $cleanHostname = $customDomain -split '/' | Select-Object -First 1
 $baseDomain    = $cleanHostname -replace '^www\.', ''
 $wwwDomain     = "www.$baseDomain"
-# ──────────────────────────────────────────────────────────────────────────────
 
-$XamppInstallDir = $null
-$RegistryPaths = @(
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\xampp"
-)
-Write-Host "[0.ps1:XAMPP] finding xampp..."
-foreach ($path in $RegistryPaths) {
-    if (Test-Path $path) {
-        $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation;
-        if ($XamppInstallDir) { break } }
-}
-if (-not $XamppInstallDir) {
-    $Drives = Get-PSDrive -PSProvider FileSystem
-    foreach ($Drive in $Drives) {
-        $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
-        if (Test-Path "$PotentialPath\xampp-control.exe") { $XamppInstallDir = $PotentialPath; break; }
-    }
-}
-if (-not $XamppInstallDir) {
-    Write-Error "[0.ps1:XAMPP] could not locate xampp to perform sanity checks"; Pause; }
+$XamppInstallDir = $env:XAMPP_DIR
+# ──────────────────────────────────────────────────────────────────────────────
 
 $hostsPath = "$env:windir\System32\drivers\etc\hosts"
 $vhostsPath = "$XamppInstallDir\apache\conf\extra\httpd-vhosts.conf"

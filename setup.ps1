@@ -1,14 +1,18 @@
 # ── Config ────────────────────────────────────────────────────────────────────
-$repoBase = "https://raw.githubusercontent.com/kawtu/hostfile/main"
-$repoApi  = "https://api.github.com/repos/kawtu/hostfile/contents/scripts"
+$XamppDownloadUrl   = "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download"
+$HttrackDownloadUrl = "https://download.httrack.com/httrack_x64-3.49.2.exe"
+
+$repoBase       = "https://raw.githubusercontent.com/kawtu/hostfile/main"
+$repoApi        = "https://api.github.com/repos/kawtu/hostfile/contents/scripts"
 
 $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 # ──────────────────────────────────────────────────────────────────────────────
 
-$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+$uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+$isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
     Write-Warning "Administrator Privileges are required, elevating setup script..."
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs; exit;
+    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs; Exit;
 }
 
 $Host.UI.RawUI.BackgroundColor = "Black"
@@ -32,7 +36,27 @@ if (-not (Test-Path $workDir)) { New-Item -ItemType Directory -Path $workDir | O
 $env:SETUP_WORKDIR = $workDir
 Write-Host "[setup.ps1:SYSTEM@dir]: $workDir" -ForegroundColor Gray
 
-$XamppInstallDir = $null
+$httrackInstallDir  = "C:\Program Files\WinHTTrack"
+$env:HTTRACK_EXE    = ""
+$httrackExe         = Join-Path $httrackInstallDir "httrack.exe"
+Write-Host "[setup.ps1:HTTRACK] finding httrack..." -ForegroundColor Cyan
+if (-not (Test-Path $httrackExe)) {
+    Write-Host "[setup.ps1:HTTRACK-download] could not locate httrack, proceeding to download." -ForegroundColor Yellow
+    $httrackInstaller = Join-Path $workDir "httrack_setup.exe"
+    try {
+        Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $HttrackDownloadUrl -OutFile $httrackInstaller
+        Write-Host "[setup.ps1:XAMPP-install] installing XAMPP..." -ForegroundColor Yellow
+        Start-Process -FilePath $httrackInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/DIR=`"$httrackInstallDir`"" -Wait
+        if (Test-Path $httrackInstaller) { Remove-Item $httrackInstaller -Force }
+    } catch { Write-Host "[setup.ps1:HTTRACK-download] failed to download/install -ForegroundColor Red, error: $_"; Exit 1; }
+}
+if (Test-Path $httrackExe) { $env:HTTRACK_EXE = $httrackExe } else {
+    Write-Host "[setup.ps1:HTTRACK-install] failed, could not locate exe at $httrackExe" -ForegroundColor Red; Exit 1; }
+Write-Host "[setup.ps1:HTTRACK] found httrack: $httrackExe" -ForegroundColor Green
+
+$XamppInstallDir    = $null
+$env:XAMPP_DIR      = ""
 $RegistryPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\xampp",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\xampp"
@@ -52,12 +76,20 @@ if (-not $XamppInstallDir) {
     }
 }
 if (-not $XamppInstallDir) {
-    Write-Error "[setup.ps1:XAMPP] could not locate xampp to perform sanity checks";
-    $env:XAMPP_DIR = ""
+    Write-Host "[setup.ps1:XAMPP-download] could not locate xampp, proceeding to download..." -ForegroundColor Yellow
+    try {
+        Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Cyan
+        Invoke-WebRequest -Uri $XamppDownloadUrl -OutFile $InstallerPath -UserAgent "Mozilla/5.0" -ErrorAction Stop
+        if ((Get-Item $InstallerPath).Length -lt 1MB) { throw "Downloaded file is too small/corrupted." }
+        Write-Host "[setup.ps1:XAMPP-install] installing XAMPP..." -ForegroundColor Cyan
+        $process = Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended --launchapps 0" -Wait -PassThru
+        $XamppInstallDir = "C:\xampp"
+        $env:XAMPP_DIR = $XamppInstallDir
+    } catch { Write-Host "[setup.ps1:XAMPP-download] download failed: $($_.Exception.Message)" -ForegroundColor Red; Pause; Exit; }
 } else {
     $env:XAMPP_DIR = $XamppInstallDir
-    Write-Host "[setup.ps1:XAMPP] found xampp: $XamppInstallDir" -ForegroundColor Green
 }
+Write-Host "[setup.ps1:XAMPP] found xampp: $XamppInstallDir" -ForegroundColor Green
 
 Write-Host "[Fetch] fetching list from GitHub..." -ForegroundColor Cyan
 try {
@@ -68,7 +100,7 @@ try {
         ForEach-Object { "scripts/$($_.name)" }
     Write-Host "[Fetch] retrieved $($scriptList.Count) scripts to run:" -ForegroundColor Gray
     $scriptList | ForEach-Object { Write-Host "  - $_" -ForegroundColor Gray }
-} catch { Write-Error "[Fetch] failed to fetch script list from GitHub: $_" Pause; exit 1; }
+} catch { Write-Host "[Fetch] failed to fetch script list from GitHub: $_" -ForegroundColor Red; Pause; Exit 1; }
 
 foreach ($script in $scriptList) {
     $scriptName = Split-Path $script -Leaf
@@ -84,7 +116,7 @@ foreach ($script in $scriptList) {
             Write-Host "[Execution]: script $script was a success." -ForegroundColor Green
         } else {Write-Warning "[Execution]: script $script exited with code $LASTEXITCODE"}
     }
-    catch {Write-Error "[Execution] script $script failed to execute, error: $_"}
+    catch { Write-Host "[Execution] script $script failed to execute, error: $_" -ForegroundColor Red }
     finally {if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force }}
 }
 
