@@ -12,7 +12,8 @@ $uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIde
 $isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
     Write-Warning "Administrator Privileges are required, elevating setup script..."
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs; Exit;
+    if ($PSCommandPath) { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs }
+    else { Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs }; Exit;
 }
 
 $Host.UI.RawUI.BackgroundColor = "Black"

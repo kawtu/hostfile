@@ -8,7 +8,7 @@ if (-not $isAdmin) {
     } else {
         $elevateCmd = "irm https://raw.githubusercontent.com/ketw/hostfile/main/scripts/0.ps1 | iex"
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$elevateCmd`"" -Verb RunAs
-    } Exit
+    }; Exit;
 }
 if ($isAlone) {
     Write-Host "[0.ps1:SCRIPT] running solo..." -ForegroundColor Cyan
@@ -41,8 +41,7 @@ if ($isAlone) {
         $Drives = Get-PSDrive -PSProvider FileSystem
         foreach ($Drive in $Drives) {
             $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
-            if (Test-Path "$PotentialPath\xampp-control.exe")
-            { $XamppInstallDir = $PotentialPath; break; }
+            if (Test-Path "$PotentialPath\xampp-control.exe") { $XamppInstallDir = $PotentialPath; break; }
         }
     }
     if (-not $XamppInstallDir) {
