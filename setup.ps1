@@ -2,8 +2,8 @@
 $XamppDownloadUrl   = "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download"
 $HttrackDownloadUrl = "https://download.httrack.com/httrack_x64-3.49.2.exe"
 
-$repoBase       = "https://raw.githubusercontent.com/kawtu/hostnet/main"
-$repoApi        = "https://api.github.com/repos/kawtu/hostnet/contents/scripts"
+$repoBase       = "https://raw.githubusercontent.com/ketw/hostnet/main"
+$repoApi        = "https://api.github.com/repos/ketw/hostnet/contents/scripts"
 
 $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 # ──────────────────────────────────────────────────────────────────────────────
