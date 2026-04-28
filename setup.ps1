@@ -86,7 +86,7 @@ if (-not $XamppInstallDir) {
         Invoke-WebRequest -Uri $XamppDownloadUrl -OutFile $InstallerPath -UserAgent "Mozilla/5.0" -ErrorAction Stop
         if ((Get-Item $InstallerPath).Length -lt 1MB) { throw "Downloaded file is too small/corrupted." }
         Write-Host "[setup.ps1:XAMPP-install] installing XAMPP..." -ForegroundColor Cyan
-        $process = Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended --launchapps 0" -Wait -PassThru
+        Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended --launchapps 0" -Wait -PassThru
         $XamppInstallDir = "C:\xampp"
         $env:XAMPP_DIR = $XamppInstallDir
         if ($null -ne $InstallerPath -and (Test-Path $InstallerPath)) { Remove-Item $InstallerPath -Force; }
