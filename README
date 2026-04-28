@@ -1,22 +1,16 @@
-# hnㅤ/host net/
-
+# hn / host net
 host + site snapshot
 
-|contents|
-|-|
-|master: [setup.ps1](setup.ps1)<br/>cleaner: [sanitize.ps1](scripts/0.ps1)|
-
 ## structure
-a minimal file structure:
 ```
-hostnet
-  ├ scripts
-  │   └ 0.ps1 ─ sanitize
-  │   └ 1.ps1 ─ snapshot
-  │   └ 2.ps1 ─ host + config
-  ├ setup.ps1 ─ master script
-  └ readme.md
+hostnet/
+├── setup.ps1         master script
+└── scripts/
+    ├── 0.ps1         sanitize
+    ├── 1.ps1         snapshot
+    └── 2.ps1         host + config
 ```
+
 ## requirements
 pulls in everything it needs on its own
 - Windows
@@ -40,5 +34,6 @@ irm https://is.gd/hsetup | iex
 ```ps1
 irm https://is.gd/hreset | iex
 ```
+
 ---
 ⑅ hn by ketw
