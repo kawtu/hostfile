@@ -47,12 +47,12 @@ if (-not (Test-Path $httrackExe)) {
     Write-Host "[setup.ps1:HTTRACK-download] could not locate httrack, proceeding to download." -ForegroundColor Yellow
     $httrackInstaller = Join-Path $workDir "httrack_setup.exe"
     try {
-        Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Yellow
+        Write-Host "[setup.ps1:HTTRACK-download] downloading HTTRACK..." -ForegroundColor Yellow
         Invoke-WebRequest -Uri $HttrackDownloadUrl -OutFile $httrackInstaller
-        Write-Host "[setup.ps1:XAMPP-install] installing XAMPP..." -ForegroundColor Yellow
+        Write-Host "[setup.ps1:HTTRACK-install] installing HTTRACK..." -ForegroundColor Yellow
         Start-Process -FilePath $httrackInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/DIR=`"$httrackInstallDir`"" -Wait
         if (Test-Path $httrackInstaller) { Remove-Item $httrackInstaller -Force }
-    } catch { Write-Host "[setup.ps1:HTTRACK-download] failed to download/install -ForegroundColor Red, error: $_"; Exit 1; }
+    } catch { Write-Host "[setup.ps1:HTTRACK-download] failed to download/install, error: $_" -ForegroundColor Red; Exit 1; }
 }
 if (Test-Path $httrackExe) { $env:HTTRACK_EXE = $httrackExe } else {
     Write-Host "[setup.ps1:HTTRACK-install] failed, could not locate exe at $httrackExe" -ForegroundColor Red; Exit 1; }
@@ -115,8 +115,9 @@ foreach ($script in $scriptList) {
     $tmpFile    = Join-Path $workDir $scriptName
     Write-Host ""; Write-Host "[Execution]: executing $script" -ForegroundColor Yellow;
     try {
+        $headers = @{ "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
         Write-Host "────────────────────────────────────────────────────"
-        Invoke-RestMethod -Uri $url -OutFile $tmpFile
+        Invoke-RestMethod -Uri $url -OutFile $tmpFile -Headers $headers
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $tmpFile
         Write-Host "────────────────────────────────────────────────────"
         if ($LASTEXITCODE -eq 0) {
