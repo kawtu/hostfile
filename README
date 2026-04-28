@@ -1,0 +1,44 @@
+# hnㅤ/host net/
+
+host + site snapshot
+
+|contents|
+|-|
+|master: [setup.ps1](setup.ps1)<br/>cleaner: [sanitize.ps1](scripts/0.ps1)|
+
+## structure
+a minimal file structure:
+```
+hostnet
+  ├ scripts
+  │   └ 0.ps1 ─ sanitize
+  │   └ 1.ps1 ─ snapshot
+  │   └ 2.ps1 ─ host + config
+  ├ setup.ps1 ─ master script
+  └ readme.md
+```
+## requirements
+pulls in everything it needs on its own
+- Windows
+- PowerShell
+- XAMPP — auto-installs if not found
+- HTTrack — auto-installs if not found
+
+## scripts
+individual scripts can also be run standalone
+
+|setup.ps1|
+|-|
+|installs what it needs, runs what it has to, no setup required|
+```ps1
+irm https://is.gd/hsetup | iex
+```
+
+|sanitize.ps1|
+|-|
+|removes the site, cleans hosts + vhosts|
+```ps1
+irm https://is.gd/hreset | iex
+```
+---
+⑅ hn by ketw
