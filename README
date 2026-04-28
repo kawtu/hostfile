@@ -21,19 +21,15 @@ pulls in everything it needs on its own
 ## scripts
 individual scripts can also be run standalone
 
-|setup.ps1|
-|-|
-|installs what it needs, runs what it has to, no setup required|
+**setup.ps1** — installs what it needs, runs what it has to
 ```ps1
 irm https://is.gd/hsetup | iex
 ```
 
-|sanitize.ps1|
-|-|
-|removes the site, cleans hosts + vhosts|
+**sanitize.ps1** — removes the site, cleans hosts + vhosts
 ```ps1
 irm https://is.gd/hreset | iex
 ```
 
----
+##
 ⑅ hn by ketw
