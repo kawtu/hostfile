@@ -28,7 +28,7 @@ irm https://is.gd/hsetup | iex
 
 **sanitize.ps1** — removes the site, cleans hosts + vhosts
 ```ps1
-irm https://is.gd/hsetup | iex
+irm https://is.gd/hreset | iex
 ```
 
 ##
