@@ -73,15 +73,19 @@ $RegistryPaths = @(
 Write-Host "[setup.ps1:XAMPP] finding xampp..."
 foreach ($path in $RegistryPaths) {
     if (Test-Path $path) {
-        $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation;
-        if ($XamppInstallDir) { break } }
+        $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation
+        if ($XamppInstallDir) { break }
+    }
 }
 if (-not $XamppInstallDir) {
-    $Drives = Get-PSDrive -PSProvider FileSystem
-    foreach ($Drive in $Drives) {
-        $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
-        if (Test-Path "$PotentialPath\xampp-control.exe")
-        { $XamppInstallDir = $PotentialPath; break; }
+    foreach ($p in @("C:\xampp", "D:\xampp")) {
+        if (Test-Path "$p\apache\bin\httpd.exe") { $XamppInstallDir = $p; break }
+    }
+}
+if (-not $XamppInstallDir) {
+    foreach ($Drive in (Get-PSDrive -PSProvider FileSystem)) {
+        $PotentialPath = Join-Path $Drive.Root "xampp"
+        if (Test-Path "$PotentialPath\apache\bin\httpd.exe") { $XamppInstallDir = $PotentialPath; break }
     }
 }
 if (-not $XamppInstallDir) {
@@ -95,26 +99,15 @@ if (-not $XamppInstallDir) {
             Write-Host "[setup.ps1:XAMPP-download] error occured due to internals outdated, likely link redirection issue." -ForegroundColor Red
             throw "[setup.ps1:XAMPP-download] failed to download, file was too small ($([math]::Round($fileSize/1MB,1))mb)"
         }
-        Write-Host "[setup.ps1:XAMPP-install] installing XAMPP..." -ForegroundColor Cyan
-        $proc = Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended", "--unattendedmodeui none", "--launchapps 0" -Wait -PassThru
-        if ($null -ne $InstallerPath -and (Test-Path $InstallerPath)) { Remove-Item $InstallerPath -Force }
-        $XamppInstallDir = $null
-        foreach ($path in $RegistryPaths) {
-            if (Test-Path $path) {
-                $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation
-                if ($XamppInstallDir) { break }
-            }
+        Write-Host "[setup.ps1:XAMPP-install] installing XAMPP to C:\xampp..." -ForegroundColor Cyan
+        Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended", "--unattendedmodeui none", "--launchapps 0", "--prefix C:\xampp" -Wait
+        if (Test-Path $InstallerPath) { Remove-Item $InstallerPath -Force }
+        $XamppInstallDir = "C:\xampp"
+        if (-not (Test-Path "$XamppInstallDir\apache\bin\httpd.exe")) {
+            throw "XAMPP install completed but apache was not found at $XamppInstallDir — installation may have failed."
         }
-        if (-not $XamppInstallDir) {
-            $Drives = Get-PSDrive -PSProvider FileSystem
-            foreach ($Drive in $Drives) {
-                $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
-                if (Test-Path "$PotentialPath\xampp-control.exe") { $XamppInstallDir = $PotentialPath; break }
-            }
-        }
-        if (-not $XamppInstallDir) { $XamppInstallDir = "C:\xampp" }
         $env:XAMPP_DIR = $XamppInstallDir
-    } catch { Write-Host "[setup.ps1:XAMPP-download] download failed: $($_.Exception.Message)" -ForegroundColor Red; Pause; Exit; }
+    } catch { Write-Host "[setup.ps1:XAMPP-download] failed: $($_.Exception.Message)" -ForegroundColor Red; Pause; Exit }
 } else {
     $env:XAMPP_DIR = $XamppInstallDir
 }
