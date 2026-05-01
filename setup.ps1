@@ -1,6 +1,5 @@
 # ── Config ────────────────────────────────────────────────────────────────────
 $XamppDownloadUrl   = "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download"
-$XamppDirectUrl     = "https://downloads.sourceforge.net/project/xampp/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe"
 $HttrackDownloadUrl = "https://download.httrack.com/httrack_x64-3.49.2.exe"
 
 $repoBase       = "https://raw.githubusercontent.com/ketw/hostnet/main"
@@ -90,7 +89,7 @@ if (-not $XamppInstallDir) {
     $InstallerPath = Join-Path -Path $workDir -ChildPath "xampp-installer.exe"
     try {
         Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Cyan
-        Invoke-WebRequest -Uri $XamppDirectUrl -OutFile $InstallerPath -UseBasicParsing -UserAgent "Mozilla/5.0" -ErrorAction Stop
+        Invoke-WebRequest -Uri $XamppDownloadUrl -OutFile $InstallerPath -UseBasicParsing -UserAgent "Wget" -ErrorAction Stop
         $fileSize = (Get-Item $InstallerPath).Length
         if ($fileSize -lt 10MB) {
             Write-Host "[setup.ps1:XAMPP-download] error occured due to internals outdated, likely link redirection issue." -ForegroundColor Red
