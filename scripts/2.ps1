@@ -1,43 +1,42 @@
 # ── Variables ─────────────────────────────────────────────────────────────────
 $PSScriptRoot = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
 
-$customDomain  = $env:TARGET_URL -replace '^https?://', '' -replace '/$', ''
-$cleanHostname = $customDomain -split '/' | Select-Object -First 1
-$baseDomain    = $cleanHostname -replace '^www\.', ''
+$uri           = [System.Uri]$env:TARGET_URL
+$baseDomain    = ($uri.Host -replace '^www\.', '')
 $wwwDomain     = "www.$baseDomain"
 
-$hostsPath = "$env:windir\System32\drivers\etc\hosts"
+$subPath       = $uri.AbsolutePath.Trim('/')
+
+$hostsPath       = "$env:windir\System32\drivers\etc\hosts"
 $XamppInstallDir = $env:XAMPP_DIR
+$apachePath      = "$XamppInstallDir\apache"
+$htdocsPath      = "$XamppInstallDir\htdocs"
 
-$apachePath = "$XamppInstallDir/apache"
-$htdocsPath = "$XamppInstallDir/htdocs"
-
-$documentRoot = "$htdocsPath/webapp"
+$documentRoot = "$htdocsPath\webapp"
 # ──────────────────────────────────────────────────────────────────────────────
 
-if ($customDomain -notlike "www.*") { $customDomain = "www.$customDomain"; }
-if (!(Test-Path "$documentRoot")) {
-    Write-Host "`[3.ps1:XAMPP-fetch] could not locate the project: $documentRoot" -ForegroundColor Red; Exit 1;
+if (!(Test-Path $documentRoot)) {
+    Write-Host "[2.ps1:XAMPP-fetch] could not locate the project: $documentRoot" -ForegroundColor Red; Exit 1
 }
 
 Write-Host "[2.ps1:HOST] setting up host file patches for $baseDomain" -ForegroundColor Cyan
 $entries = @("127.0.0.1`t$baseDomain", "127.0.0.1`t$wwwDomain")
 foreach ($entry in $entries) {
-    Write-Host "[2.ps1:HOST-add] proceeding to add $domainOnly to the host file." -ForegroundColor Cyan
     $domainOnly = $entry -split "`t" | Select-Object -Last 1
+    Write-Host "[2.ps1:HOST-add] proceeding to add $domainOnly to the host file." -ForegroundColor Cyan
     if (!(Select-String -Path $hostsPath -Pattern ([regex]::Escape($domainOnly)) -Quiet)) {
         try {
             Write-Host "[2.ps1:HOST-add] adding..." -ForegroundColor Yellow
             Add-Content -Path $hostsPath -Value "`r`n$entry" -ErrorAction Stop
             Write-Host "[2.ps1:HOST-add] added $domainOnly" -ForegroundColor Green
-        } 
-        catch {
+        } catch {
             Write-Host "[2.ps1:HOST-alert] the host file is locked, most likely in-use by other applications." -ForegroundColor Red
-            $choice = Read-Host "Proceed with backup and force-addition of $domainOnly to the host file? [y/n]:" -ForegroundColor Yellow
+            $choice = Read-Host "Proceed with backup and force-addition of $domainOnly to the host file? [y/n]"
             if ($choice -eq 'Y' -or $choice -eq 'y') {
                 try {
                     Write-Host "[2.ps1:HOST-backup] creating a backup..." -ForegroundColor Yellow
-                    $backupPath = "$hostsPath.backup"; $currentContent = Get-Content -Path $hostsPath -Raw;
+                    $backupPath = "$hostsPath.backup"
+                    $currentContent = Get-Content -Path $hostsPath -Raw
                     $updatedContent = $currentContent.TrimEnd() + "`r`n$entry"
                     if (Test-Path $backupPath) { Remove-Item $backupPath -Force }
                     Rename-Item -Path $hostsPath -NewName "hosts.backup" -Force
@@ -45,10 +44,10 @@ foreach ($entry in $entries) {
                     Write-Host "[2.ps1:HOST-update] updating host file with new content..." -ForegroundColor Yellow
                     $updatedContent | Out-File -FilePath $hostsPath -Encoding ASCII
                     Write-Host "[2.ps1:HOST-update] successfully updated." -ForegroundColor Green
-                } catch { Write-Host "[2.ps1:HOST-lock] hard lock detected, close programs and try again." -ForegroundColor Red; }
+                } catch { Write-Host "[2.ps1:HOST-lock] hard lock detected, close programs and try again." -ForegroundColor Red }
             }
         }
-    } else { Write-Host "[2.ps1:HOST-skip] $domainOnly is already in the host file." -ForegroundColor Yellow; }
+    } else { Write-Host "[2.ps1:HOST-skip] $domainOnly is already in the host file." -ForegroundColor Yellow }
 }
 
 $httpdConfPath = "$apachePath\conf\httpd.conf"
@@ -59,25 +58,47 @@ if (Test-Path $httpdConfPath) {
 }
 
 $vhostsPath = "$apachePath\conf\extra\httpd-vhosts.conf"
+
 $localhostFallback = @"
 <VirtualHost *:80>
-    DocumentRoot `"$htdocsPath`"
+    DocumentRoot "$htdocsPath"
     ServerName localhost
 </VirtualHost>
 "@
-$vhostConfig = @"
+
+if ($subPath -ne '') {
+    Write-Host "[2.ps1:VHOST] subpath detected: '/$subPath/' — root will redirect to it" -ForegroundColor Gray
+    $vhostConfig = @"
 
 # Custom Domain Automator: $baseDomain
 <VirtualHost *:80>
-    DocumentRoot `"$documentRoot`"
+    DocumentRoot "$documentRoot"
     ServerName $baseDomain
     ServerAlias $wwwDomain
-    <Directory `"$documentRoot`">
+    <Directory "$documentRoot">
+        AllowOverride All
+        Require all granted
+    </Directory>
+    # Redirect bare root to the mirrored subpath
+    RedirectMatch ^/$ /$subPath/
+</VirtualHost>
+"@
+} else {
+    $vhostConfig = @"
+
+# Custom Domain Automator: $baseDomain
+<VirtualHost *:80>
+    DocumentRoot "$documentRoot"
+    ServerName $baseDomain
+    ServerAlias $wwwDomain
+    <Directory "$documentRoot">
         AllowOverride All
         Require all granted
     </Directory>
 </VirtualHost>
 "@
+}
+
 if (Test-Path $vhostsPath) {
     Write-Host "[2.ps1:VHOST-add] adding fallback-config..." -ForegroundColor Yellow
     if (!(Select-String -Path $vhostsPath -Pattern "ServerName localhost" -Quiet)) {
@@ -88,8 +109,8 @@ if (Test-Path $vhostsPath) {
     if (!(Select-String -Path $vhostsPath -Pattern "ServerName $baseDomain" -Quiet)) {
         Add-Content -Path $vhostsPath -Value $vhostConfig
         Write-Host "[2.ps1:VHOST-add] added $baseDomain (with www alias)." -ForegroundColor Green
-    } else { Write-Host "[2.ps1:VHOST-skip] vhost config for $baseDomain already exists." -ForegroundColor Yellow; }
-} else { Write-Host "[2.ps1:VHOST-error] could not locate httpd-vhosts.conf at: $vhostsPath" -ForegroundColor Red; Exit 1; }
+    } else { Write-Host "[2.ps1:VHOST-skip] vhost config for $baseDomain already exists." -ForegroundColor Yellow }
+} else { Write-Host "[2.ps1:VHOST-error] could not locate httpd-vhosts.conf at: $vhostsPath" -ForegroundColor Red; Exit 1 }
 
 Write-Host "[2.ps1:SYSTEM-dns] flushing dns cache..." -ForegroundColor Yellow
 Clear-DnsClientCache
@@ -102,7 +123,7 @@ if ($ApacheService) {
     try {
         Restart-Service -Name $ApacheService.Name -Force -ErrorAction SilentlyContinue
         Write-Host "[2.ps1:XAMPP-apache] service restarted." -ForegroundColor Green
-    } catch { Write-Host "[2.ps1:XAMPP-apache] failed to restart service, manually attempting to restart..." -ForegroundColor Yellow; }
+    } catch { Write-Host "[2.ps1:XAMPP-apache] failed to restart service, manually attempting to restart..." -ForegroundColor Yellow }
 } else {
     $HttpdPath = Join-Path -Path $XamppInstallDir -ChildPath "apache\bin\httpd.exe"
     if (Test-Path $HttpdPath) {
@@ -116,5 +137,7 @@ if ($ApacheService) {
     }
 }
 
-Start-Process $customDomain
+$launchUrl = "http://$baseDomain"
+if ($subPath -ne '') { $launchUrl = "http://$baseDomain/$subPath/" }
+Start-Process $launchUrl
 Write-Host "[2.ps1:message] host cooked, deep fried even" -ForegroundColor Green
