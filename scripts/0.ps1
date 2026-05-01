@@ -89,25 +89,28 @@ Write-Host "[0.ps1:SYSTEM-dns] flushing dns cache..." -ForegroundColor Yellow
 Clear-DnsClientCache
 Write-Host "[0.ps1:SYSTEM-dns] flush successful" -ForegroundColor Green
 
-Write-Host "[0.ps1:XAMPP-apache] apache restart required, restarting..." -ForegroundColor Cyan
+Write-Host "[0.ps1:XAMPP-apache] checking apache status..." -ForegroundColor Cyan
 $ApacheService = Get-Service | Where-Object { $_.Name -like "Apache*" }
+$HttpdPath = Join-Path -Path $XamppInstallDir -ChildPath "apache\bin\httpd.exe"
 if ($ApacheService) {
     Write-Host "[0.ps1:XAMPP-apache] found service, restarting..." -ForegroundColor Yellow
     try {
         Restart-Service -Name $ApacheService.Name -Force -ErrorAction SilentlyContinue
         Write-Host "[0.ps1:XAMPP-apache] service restarted." -ForegroundColor Green
     } catch { Write-Host "[0.ps1:XAMPP-apache] failed to restart service, manually attempting to restart..." -ForegroundColor Yellow; }
-} else {
-    $HttpdPath = Join-Path -Path $XamppInstallDir -ChildPath "apache\bin\httpd.exe"
-    if (Test-Path $HttpdPath) {
-        Write-Host "[0.ps1:XAMPP-apache] service not found, restarting via executable..." -ForegroundColor Yellow
-        Get-Process "httpd" -ErrorAction SilentlyContinue | Stop-Process -Force
+} elseif (Test-Path $HttpdPath) {
+    $httpdRunning = Get-Process "httpd" -ErrorAction SilentlyContinue
+    if ($httpdRunning) {
+        Write-Host "[0.ps1:XAMPP-apache] no service found, restarting process..." -ForegroundColor Yellow
+        $httpdRunning | Stop-Process -Force
         Start-Sleep -Seconds 1
         Start-Process -FilePath $HttpdPath -WindowStyle Hidden
         Write-Host "[0.ps1:XAMPP-apache] process restarted." -ForegroundColor Green
     } else {
-        Write-Host "[0.ps1:XAMPP-apache] could not locate httpd.exe at $HttpdPath" -ForegroundColor Red
+        Write-Host "[0.ps1:XAMPP-apache] apache is not running, skipping restart." -ForegroundColor Yellow
     }
+} else {
+    Write-Host "[0.ps1:XAMPP-apache] could not locate httpd.exe at $HttpdPath, apache may not be installed correctly." -ForegroundColor Red
 }
 
 Write-Host "[0.ps1:message] system sanitized" -ForegroundColor Green
