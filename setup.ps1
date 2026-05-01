@@ -1,5 +1,6 @@
 # ── Config ────────────────────────────────────────────────────────────────────
 $XamppDownloadUrl   = "https://sourceforge.net/projects/xampp/files/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe/download"
+$XamppDirectUrl     = "https://downloads.sourceforge.net/project/xampp/XAMPP%20Windows/8.2.12/xampp-windows-x64-8.2.12-0-VS16-installer.exe"
 $HttrackDownloadUrl = "https://download.httrack.com/httrack_x64-3.49.2.exe"
 
 $repoBase       = "https://raw.githubusercontent.com/ketw/hostnet/main"
@@ -43,15 +44,21 @@ $httrackInstallDir  = "C:\Program Files\WinHTTrack"
 $env:HTTRACK_EXE    = ""
 $httrackExe         = Join-Path $httrackInstallDir "httrack.exe"
 Write-Host "[setup.ps1:HTTRACK] finding httrack..." -ForegroundColor Cyan
+
+if (-not (Test-Path $httrackExe)) {
+    $httrackInPath = Get-Command "httrack.exe" -ErrorAction SilentlyContinue
+    if ($httrackInPath) { $httrackExe = $httrackInPath.Source }
+}
 if (-not (Test-Path $httrackExe)) {
     Write-Host "[setup.ps1:HTTRACK-download] could not locate httrack, proceeding to download." -ForegroundColor Yellow
     $httrackInstaller = Join-Path $workDir "httrack_setup.exe"
     try {
         Write-Host "[setup.ps1:HTTRACK-download] downloading HTTRACK..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri $HttrackDownloadUrl -OutFile $httrackInstaller
+        Invoke-WebRequest -Uri $HttrackDownloadUrl -OutFile $httrackInstaller -UseBasicParsing
         Write-Host "[setup.ps1:HTTRACK-install] installing HTTRACK..." -ForegroundColor Yellow
         Start-Process -FilePath $httrackInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/DIR=`"$httrackInstallDir`"" -Wait
         if (Test-Path $httrackInstaller) { Remove-Item $httrackInstaller -Force }
+        $httrackExe = Join-Path $httrackInstallDir "httrack.exe"
     } catch { Write-Host "[setup.ps1:HTTRACK-download] failed to download/install, error: $_" -ForegroundColor Red; Exit 1; }
 }
 if (Test-Path $httrackExe) { $env:HTTRACK_EXE = $httrackExe } else {
@@ -83,13 +90,31 @@ if (-not $XamppInstallDir) {
     $InstallerPath = Join-Path -Path $workDir -ChildPath "xampp-installer.exe"
     try {
         Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Cyan
-        Invoke-WebRequest -Uri $XamppDownloadUrl -OutFile $InstallerPath -UserAgent "Mozilla/5.0" -ErrorAction Stop
-        if ((Get-Item $InstallerPath).Length -lt 1MB) { throw "Downloaded file is too small/corrupted." }
+        Invoke-WebRequest -Uri $XamppDirectUrl -OutFile $InstallerPath -UseBasicParsing -UserAgent "Mozilla/5.0" -ErrorAction Stop
+        $fileSize = (Get-Item $InstallerPath).Length
+        if ($fileSize -lt 10MB) {
+            Write-Host "[setup.ps1:XAMPP-download] error occured due to internals outdated, likely link redirection issue." -ForegroundColor Red
+            throw "[setup.ps1:XAMPP-download] failed to download, file was too small ($([math]::Round($fileSize/1MB,1))mb)"
+        }
         Write-Host "[setup.ps1:XAMPP-install] installing XAMPP..." -ForegroundColor Cyan
-        Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended --launchapps 0" -Wait -PassThru
-        $XamppInstallDir = "C:\xampp"
+        $proc = Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended", "--unattendedmodeui none", "--launchapps 0" -Wait -PassThru
+        if ($null -ne $InstallerPath -and (Test-Path $InstallerPath)) { Remove-Item $InstallerPath -Force }
+        $XamppInstallDir = $null
+        foreach ($path in $RegistryPaths) {
+            if (Test-Path $path) {
+                $XamppInstallDir = (Get-ItemProperty -Path $path).InstallLocation
+                if ($XamppInstallDir) { break }
+            }
+        }
+        if (-not $XamppInstallDir) {
+            $Drives = Get-PSDrive -PSProvider FileSystem
+            foreach ($Drive in $Drives) {
+                $PotentialPath = Join-Path -Path $Drive.Root -ChildPath "xampp"
+                if (Test-Path "$PotentialPath\xampp-control.exe") { $XamppInstallDir = $PotentialPath; break }
+            }
+        }
+        if (-not $XamppInstallDir) { $XamppInstallDir = "C:\xampp" }
         $env:XAMPP_DIR = $XamppInstallDir
-        if ($null -ne $InstallerPath -and (Test-Path $InstallerPath)) { Remove-Item $InstallerPath -Force; }
     } catch { Write-Host "[setup.ps1:XAMPP-download] download failed: $($_.Exception.Message)" -ForegroundColor Red; Pause; Exit; }
 } else {
     $env:XAMPP_DIR = $XamppInstallDir
