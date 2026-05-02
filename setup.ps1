@@ -8,7 +8,7 @@ $repoApi        = "https://api.github.com/repos/ketw/hostnet/contents/scripts"
 $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ── Helper ───────────────────────────────────────────────────────────
+# ── Helper ────────────────────────────────────────────────────────────────────
 function Invoke-Download {
     param([string]$Uri, [string]$OutFile, [string]$Label, [string]$UserAgent = "Mozilla/5.0")
 
@@ -83,7 +83,7 @@ function Invoke-Download {
     Remove-Job  $job
     if ($jobErr) { throw $jobErr[0] }
 }
-# ─────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
 
 $uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 $isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
