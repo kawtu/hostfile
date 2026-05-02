@@ -4,15 +4,13 @@ $PSScriptRoot = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Locat
 $uri           = [System.Uri]$env:TARGET_URL
 $baseDomain    = ($uri.Host -replace '^www\.', '')
 $wwwDomain     = "www.$baseDomain"
-
 $subPath       = $uri.AbsolutePath.Trim('/')
 
 $hostsPath       = "$env:windir\System32\drivers\etc\hosts"
 $XamppInstallDir = $env:XAMPP_DIR
 $apachePath      = "$XamppInstallDir\apache"
 $htdocsPath      = "$XamppInstallDir\htdocs"
-
-$documentRoot = "$htdocsPath\webapp"
+$documentRoot    = "$htdocsPath\webapp"
 # ──────────────────────────────────────────────────────────────────────────────
 
 if (!(Test-Path $documentRoot)) {
@@ -35,13 +33,12 @@ foreach ($entry in $entries) {
             if ($choice -eq 'Y' -or $choice -eq 'y') {
                 try {
                     Write-Host "[2.ps1:HOST-backup] creating a backup..." -ForegroundColor Yellow
-                    $backupPath = "$hostsPath.backup"
+                    $backupPath     = "$hostsPath.backup"
                     $currentContent = Get-Content -Path $hostsPath -Raw
                     $updatedContent = $currentContent.TrimEnd() + "`r`n$entry"
                     if (Test-Path $backupPath) { Remove-Item $backupPath -Force }
                     Rename-Item -Path $hostsPath -NewName "hosts.backup" -Force
                     Write-Host "[2.ps1:HOST-backup] backup created." -ForegroundColor Green
-                    Write-Host "[2.ps1:HOST-update] updating host file with new content..." -ForegroundColor Yellow
                     $updatedContent | Out-File -FilePath $hostsPath -Encoding ASCII
                     Write-Host "[2.ps1:HOST-update] successfully updated." -ForegroundColor Green
                 } catch { Write-Host "[2.ps1:HOST-lock] hard lock detected, close programs and try again." -ForegroundColor Red }
@@ -53,52 +50,31 @@ foreach ($entry in $entries) {
 $httpdConfPath = "$apachePath\conf\httpd.conf"
 if (Test-Path $httpdConfPath) {
     Write-Host "[2.ps1:APACHE-httpd] ensuring vhosts is enabled..." -ForegroundColor Yellow
-    (Get-Content $httpdConfPath) -replace "^#\s*(Include conf/extra/httpd-vhosts.conf)", "`$1" | Set-Content $httpdConfPath
+    (Get-Content $httpdConfPath) -replace "^#\s*(Include conf/extra/httpd-vhosts.conf)", '$1' | Set-Content $httpdConfPath
     Write-Host "[2.ps1:APACHE-httpd] vhosts are enabled." -ForegroundColor Green
 }
 
-$vhostsPath = "$apachePath\conf\extra\httpd-vhosts.conf"
-
-$localhostFallback = @"
-<VirtualHost *:80>
-    DocumentRoot "$htdocsPath"
-    ServerName localhost
-</VirtualHost>
-"@
-
+$n = "`r`n"
+$localhostFallback  = "${n}<VirtualHost *:80>${n}"
+$localhostFallback += "    DocumentRoot `"$htdocsPath`"${n}"
+$localhostFallback += "    ServerName localhost${n}"
+$localhostFallback += "</VirtualHost>${n}"
+$vhostConfig  = "${n}# Custom Domain Automator: $baseDomain${n}"
+$vhostConfig += "<VirtualHost *:80>${n}"
+$vhostConfig += "    DocumentRoot `"$documentRoot`"${n}"
+$vhostConfig += "    ServerName $baseDomain${n}"
+$vhostConfig += "    ServerAlias $wwwDomain${n}"
+$vhostConfig += "    <Directory `"$documentRoot`">${n}"
+$vhostConfig += "        AllowOverride All${n}"
+$vhostConfig += "        Require all granted${n}"
+$vhostConfig += "    </Directory>${n}"
 if ($subPath -ne '') {
     Write-Host "[2.ps1:VHOST] subpath detected: '/$subPath/' — root will redirect to it" -ForegroundColor Gray
-    $vhostConfig = @"
-
-# Custom Domain Automator: $baseDomain
-<VirtualHost *:80>
-    DocumentRoot "$documentRoot"
-    ServerName $baseDomain
-    ServerAlias $wwwDomain
-    <Directory "$documentRoot">
-        AllowOverride All
-        Require all granted
-    </Directory>
-    # Redirect bare root to the mirrored subpath
-    RedirectMatch ^/$ /$subPath/
-</VirtualHost>
-"@
-} else {
-    $vhostConfig = @"
-
-# Custom Domain Automator: $baseDomain
-<VirtualHost *:80>
-    DocumentRoot "$documentRoot"
-    ServerName $baseDomain
-    ServerAlias $wwwDomain
-    <Directory "$documentRoot">
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-"@
+    $vhostConfig += "    RedirectMatch ^/`$ /$subPath/${n}"
 }
+$vhostConfig += "</VirtualHost>${n}"
 
+$vhostsPath = "$apachePath\conf\extra\httpd-vhosts.conf"
 if (Test-Path $vhostsPath) {
     Write-Host "[2.ps1:VHOST-add] adding fallback-config..." -ForegroundColor Yellow
     if (!(Select-String -Path $vhostsPath -Pattern "ServerName localhost" -Quiet)) {
@@ -106,7 +82,7 @@ if (Test-Path $vhostsPath) {
     }
     Write-Host "[2.ps1:VHOST-add] added fallback-config." -ForegroundColor Green
     Write-Host "[2.ps1:VHOST-add] adding $baseDomain config..." -ForegroundColor Yellow
-    if (!(Select-String -Path $vhostsPath -Pattern "ServerName $baseDomain" -Quiet)) {
+    if (!(Select-String -Path $vhostsPath -Pattern ([regex]::Escape("ServerName $baseDomain")) -Quiet)) {
         Add-Content -Path $vhostsPath -Value $vhostConfig
         Write-Host "[2.ps1:VHOST-add] added $baseDomain (with www alias)." -ForegroundColor Green
     } else { Write-Host "[2.ps1:VHOST-skip] vhost config for $baseDomain already exists." -ForegroundColor Yellow }
