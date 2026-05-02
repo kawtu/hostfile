@@ -8,6 +8,68 @@ $repoApi        = "https://api.github.com/repos/ketw/hostnet/contents/scripts"
 $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ── Helper ───────────────────────────────────────────────────────────
+function Invoke-Download {
+    param([string]$Uri, [string]$OutFile, [string]$Label, [string]$UserAgent = "Mozilla/5.0")
+
+    $wc = New-Object System.Net.WebClient
+    $wc.Headers.Add("User-Agent", $UserAgent)
+
+    $sw         = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastBytes  = 0
+    $lastTick   = $sw.ElapsedMilliseconds
+    $speedStr   = "-- KB/s"
+    $barWidth   = 30
+
+    $onProgress = Register-ObjectEvent -InputObject $wc -EventName DownloadProgressChanged -Action {
+        $pct      = $Event.SourceEventArgs.ProgressPercentage
+        $received = $Event.SourceEventArgs.BytesReceived
+        $total    = $Event.SourceEventArgs.TotalBytesToReceive
+
+        $now      = $sw.ElapsedMilliseconds
+        $elapsed  = $now - $lastTick
+        if ($elapsed -ge 500) {
+            $bytesDelta = $received - $lastBytes
+            $kbps       = [math]::Round(($bytesDelta / 1KB) / ($elapsed / 1000))
+            if ($kbps -ge 1024) { $speedStr = "$([math]::Round($kbps/1024, 1)) MB/s" }
+            else                { $speedStr = "$kbps KB/s" }
+            $script:lastBytes = $received
+            $script:lastTick  = $now
+        }
+
+        $filled   = [math]::Floor($pct / 100 * $barWidth)
+        $empty    = $barWidth - $filled
+        $bar      = ('█' * $filled) + ('░' * $empty)
+
+        $dlMB     = [math]::Round($received / 1MB, 1)
+        $totMB    = if ($total -gt 0) { "$([math]::Round($total / 1MB, 1)) MB" } else { "? MB" }
+
+        $line = "`r  [$bar] $pct%  $dlMB MB / $totMB  @ $speedStr   "
+        [Console]::Write($line)
+    }
+
+    $done = $false
+    $err  = $null
+    $onComplete = Register-ObjectEvent -InputObject $wc -EventName DownloadFileCompleted -Action {
+        $script:done = $true
+        if ($Event.SourceEventArgs.Error) { $script:err = $Event.SourceEventArgs.Error }
+    }
+
+    Write-Host ""
+    $wc.DownloadFileAsync([Uri]$Uri, $OutFile)
+    while (-not $done) { Start-Sleep -Milliseconds 100 }
+
+    Unregister-Event -SourceIdentifier $onProgress.Name  -ErrorAction SilentlyContinue
+    Unregister-Event -SourceIdentifier $onComplete.Name  -ErrorAction SilentlyContinue
+    Remove-Job       -Name             $onProgress.Name  -ErrorAction SilentlyContinue
+    Remove-Job       -Name             $onComplete.Name  -ErrorAction SilentlyContinue
+    $wc.Dispose()
+
+    [Console]::Write("`r" + (" " * 80) + "`r")
+    if ($err) { throw $err }
+}
+# ─────────────────────────────────────────────────────────────────────────────
+
 $uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 $isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if (-not $isAdmin) {
@@ -53,7 +115,7 @@ if (-not (Test-Path $httrackExe)) {
     $httrackInstaller = Join-Path $workDir "httrack_setup.exe"
     try {
         Write-Host "[setup.ps1:HTTRACK-download] downloading HTTRACK..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri $HttrackDownloadUrl -OutFile $httrackInstaller -UseBasicParsing
+        Invoke-Download -Uri $HttrackDownloadUrl -OutFile $httrackInstaller -Label "HTTrack"
         Write-Host "[setup.ps1:HTTRACK-install] installing HTTRACK..." -ForegroundColor Yellow
         Start-Process -FilePath $httrackInstaller -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/DIR=`"$httrackInstallDir`"" -Wait
         if (Test-Path $httrackInstaller) { Remove-Item $httrackInstaller -Force }
@@ -93,7 +155,7 @@ if (-not $XamppInstallDir) {
     $InstallerPath = Join-Path -Path $workDir -ChildPath "xampp-installer.exe"
     try {
         Write-Host "[setup.ps1:XAMPP-download] downloading XAMPP..." -ForegroundColor Cyan
-        Invoke-WebRequest -Uri $XamppDownloadUrl -OutFile $InstallerPath -UseBasicParsing -UserAgent "Wget" -ErrorAction Stop
+        Invoke-Download -Uri $XamppDownloadUrl -OutFile $InstallerPath -Label "XAMPP" -UserAgent "Wget"
         $fileSize = (Get-Item $InstallerPath).Length
         if ($fileSize -lt 10MB) {
             Write-Host "[setup.ps1:XAMPP-download] error occured due to internals outdated, likely link redirection issue." -ForegroundColor Red
