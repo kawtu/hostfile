@@ -12,61 +12,76 @@ $elevateCmd = "irm $repoBase/setup.ps1 | iex"
 function Invoke-Download {
     param([string]$Uri, [string]$OutFile, [string]$Label, [string]$UserAgent = "Mozilla/5.0")
 
-    $wc = New-Object System.Net.WebClient
-    $wc.Headers.Add("User-Agent", $UserAgent)
+    $totalBytes = 0
+    try {
+        $req = [System.Net.HttpWebRequest]::Create($Uri)
+        $req.Method = "HEAD"
+        $req.UserAgent = $UserAgent
+        $req.AllowAutoRedirect = $true
+        $res = $req.GetResponse()
+        $totalBytes = $res.ContentLength
+        $res.Close()
+    } catch { $totalBytes = 0 }
 
-    $sw         = [System.Diagnostics.Stopwatch]::StartNew()
-    $lastBytes  = 0
-    $lastTick   = $sw.ElapsedMilliseconds
-    $speedStr   = "-- KB/s"
-    $barWidth   = 30
+    $job = Start-Job -ScriptBlock {
+        param($uri, $outFile, $ua)
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", $ua)
+        $wc.DownloadFile($uri, $outFile)
+    } -ArgumentList $Uri, $OutFile, $UserAgent
 
-    $onProgress = Register-ObjectEvent -InputObject $wc -EventName DownloadProgressChanged -Action {
-        $pct      = $Event.SourceEventArgs.ProgressPercentage
-        $received = $Event.SourceEventArgs.BytesReceived
-        $total    = $Event.SourceEventArgs.TotalBytesToReceive
+    $sw       = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastSize = 0
+    $lastTick = 0
+    $speed    = "-- KB/s"
+    $barWidth = 28
 
-        $now      = $sw.ElapsedMilliseconds
-        $elapsed  = $now - $lastTick
-        if ($elapsed -ge 500) {
-            $bytesDelta = $received - $lastBytes
-            $kbps       = [math]::Round(($bytesDelta / 1KB) / ($elapsed / 1000))
-            if ($kbps -ge 1024) { $speedStr = "$([math]::Round($kbps/1024, 1)) MB/s" }
-            else                { $speedStr = "$kbps KB/s" }
-            $script:lastBytes = $received
-            $script:lastTick  = $now
+    try {
+        while ($job.State -eq 'Running') {
+            Start-Sleep -Milliseconds 300
+
+            if (-not (Test-Path $OutFile)) { continue }
+            $size = (Get-Item $OutFile).Length
+
+            $now     = $sw.ElapsedMilliseconds
+            $elapsed = $now - $lastTick
+            if ($elapsed -ge 400 -and $elapsed -gt 0) {
+                $kbps     = [math]::Round((($size - $lastSize) / 1KB) / ($elapsed / 1000))
+                $speed    = if ($kbps -ge 1024) { "$([math]::Round($kbps/1024,1)) MB/s" } else { "$kbps KB/s" }
+                $lastSize = $size
+                $lastTick = $now
+            }
+
+            $dlMB  = [math]::Round($size / 1MB, 1)
+
+            if ($totalBytes -gt 0) {
+                $pct    = [math]::Min([math]::Floor($size / $totalBytes * 100), 100)
+                $totMB  = [math]::Round($totalBytes / 1MB, 1)
+                $filled = [math]::Floor($pct / 100 * $barWidth)
+                $empty  = $barWidth - $filled
+                $bar    = ('#' * $filled) + ('-' * $empty)
+                [Console]::Write("`r  [$bar] $pct%  $dlMB / $totMB MB  @ $speed   ")
+            } else {
+                $dots = '.' * (([int]($sw.Elapsed.TotalSeconds) % 4) + 1)
+                $pad  = ' ' * (4 - $dots.Length)
+                [Console]::Write("`r  [????] --  $dlMB MB  @ $speed$dots$pad   ")
+            }
         }
-
-        $filled   = [math]::Floor($pct / 100 * $barWidth)
-        $empty    = $barWidth - $filled
-        $bar      = ('█' * $filled) + ('░' * $empty)
-
-        $dlMB     = [math]::Round($received / 1MB, 1)
-        $totMB    = if ($total -gt 0) { "$([math]::Round($total / 1MB, 1)) MB" } else { "? MB" }
-
-        $line = "`r  [$bar] $pct%  $dlMB MB / $totMB  @ $speedStr   "
-        [Console]::Write($line)
+    } finally {
+        if ($job.State -eq 'Running') {
+            Stop-Job   $job
+            Remove-Job $job
+            [Console]::Write("`r" + (" " * 72) + "`r")
+            Write-Host "[download] cancelled." -ForegroundColor Yellow
+            if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
+            exit 1
+        }
     }
 
-    $done = $false
-    $err  = $null
-    $onComplete = Register-ObjectEvent -InputObject $wc -EventName DownloadFileCompleted -Action {
-        $script:done = $true
-        if ($Event.SourceEventArgs.Error) { $script:err = $Event.SourceEventArgs.Error }
-    }
-
-    Write-Host ""
-    $wc.DownloadFileAsync([Uri]$Uri, $OutFile)
-    while (-not $done) { Start-Sleep -Milliseconds 100 }
-
-    Unregister-Event -SourceIdentifier $onProgress.Name  -ErrorAction SilentlyContinue
-    Unregister-Event -SourceIdentifier $onComplete.Name  -ErrorAction SilentlyContinue
-    Remove-Job       -Name             $onProgress.Name  -ErrorAction SilentlyContinue
-    Remove-Job       -Name             $onComplete.Name  -ErrorAction SilentlyContinue
-    $wc.Dispose()
-
-    [Console]::Write("`r" + (" " * 80) + "`r")
-    if ($err) { throw $err }
+    [Console]::Write("`r" + (" " * 72) + "`r")
+    Receive-Job $job -ErrorVariable jobErr | Out-Null
+    Remove-Job  $job
+    if ($jobErr) { throw $jobErr[0] }
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
