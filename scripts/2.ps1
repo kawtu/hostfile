@@ -1,5 +1,5 @@
 # ── Variables ─────────────────────────────────────────────────────────────────
-$PSScriptRoot = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
+$workDir = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
 
 $uri           = [System.Uri]$env:TARGET_URL
 $baseDomain    = ($uri.Host -replace '^www\.', '')
@@ -10,7 +10,8 @@ $hostsPath       = "$env:windir\System32\drivers\etc\hosts"
 $XamppInstallDir = $env:XAMPP_DIR
 $apachePath      = "$XamppInstallDir\apache"
 $htdocsPath      = "$XamppInstallDir\htdocs"
-$documentRoot    = "$htdocsPath\webapp"
+
+$documentRoot = "$htdocsPath\$baseDomain"
 # ──────────────────────────────────────────────────────────────────────────────
 
 if (!(Test-Path $documentRoot)) {

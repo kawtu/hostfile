@@ -66,6 +66,8 @@ $XamppInstallDir = $env:XAMPP_DIR
 
 $hostsPath = "$env:windir\System32\drivers\etc\hosts"
 $vhostsPath = "$XamppInstallDir\apache\conf\extra\httpd-vhosts.conf"
+$htdocsPath = "$XamppInstallDir\htdocs"
+$domainDir  = "$htdocsPath\$baseDomain"
 Write-Host "[0.ps1:SYSTEM] system checkup for $baseDomain..." -ForegroundColor Cyan
 if (Test-Path $hostsPath) {
     $hostsContent = Get-Content -Path $hostsPath
@@ -75,14 +77,19 @@ if (Test-Path $hostsPath) {
 }
 if (Test-Path $vhostsPath) {
     $vhostsContent = Get-Content -Path $vhostsPath -Raw
-    $pattern = "(?s)# Custom Domain Automator: $baseDomain.*?<VirtualHost \*:80>.*?</VirtualHost>\s*"
+    $pattern = "(?s)# Custom Domain Automator: $([regex]::Escape($baseDomain)).*?</VirtualHost>\s*"
     if ($vhostsContent -match $pattern) {
         $newVhostsContent = $vhostsContent -replace $pattern, ""
         $newVhostsContent | Out-File -FilePath $vhostsPath -Encoding ASCII -Force
-        Write-Host "[0.ps1:SYSTEM-sucess] sanitized 'Virtual-Host' block from httpd-vhosts.conf." -ForegroundColor Green
+        Write-Host "[0.ps1:SYSTEM-success] sanitized VirtualHost block from httpd-vhosts.conf." -ForegroundColor Green
     } else {
-        Write-Host "[0.ps1:SYSTEM-skip] no contaminations in 'Virtual-Host' block." -ForegroundColor Yellow
+        Write-Host "[0.ps1:SYSTEM-skip] no contaminations in VirtualHost block." -ForegroundColor Yellow
     }
+}
+if (Test-Path $domainDir) {
+    Write-Host "[0.ps1:SYSTEM-clean] removing deployed files at htdocs\$baseDomain..." -ForegroundColor Yellow
+    Remove-Item -Path $domainDir -Recurse -Force
+    Write-Host "[0.ps1:SYSTEM-clean] removed htdocs\$baseDomain." -ForegroundColor Green
 }
 
 Write-Host "[0.ps1:SYSTEM-dns] flushing dns cache..." -ForegroundColor Yellow
