@@ -69,7 +69,7 @@ $vhostConfig += "        AllowOverride All${n}"
 $vhostConfig += "        Require all granted${n}"
 $vhostConfig += "    </Directory>${n}"
 if ($subPath -ne '') {
-    Write-Host "[2.ps1:VHOST] subpath detected: '/$subPath/' — root will redirect to it" -ForegroundColor Gray
+    Write-Host "[2.ps1:VHOST] subpath detected: '/$subPath/', root will redirect to it" -ForegroundColor Gray
     $vhostConfig += "    RedirectMatch ^/`$ /$subPath/${n}"
 }
 $vhostConfig += "</VirtualHost>${n}"

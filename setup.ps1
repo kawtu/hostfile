@@ -186,7 +186,7 @@ if (-not $XamppInstallDir) {
             Start-Sleep -Seconds 2
         }
         if (-not (Test-Path "$XamppInstallDir\apache\bin\httpd.exe")) {
-            throw "XAMPP install completed but apache was not found at $XamppInstallDir — installation may have failed."
+            throw "XAMPP installed but apache was not found at $XamppInstallDir, installation may have failed."
         }
         $env:XAMPP_DIR = $XamppInstallDir
     } catch { Write-Host "[setup.ps1:XAMPP-download] failed: $($_.Exception.Message)" -ForegroundColor Red; Pause; Exit }
