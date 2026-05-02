@@ -1,3 +1,12 @@
+# ── Module ────────────────────────────────────────────────────────────────────
+$_repoBase = "https://raw.githubusercontent.com/ketw/hostnet/main"
+$_hnModule = Join-Path $env:TEMP "hn.psm1"
+if (-not (Test-Path $_hnModule)) {
+    Invoke-RestMethod -Uri "$_repoBase/modules/hn.psm1" -OutFile $_hnModule -Headers @{ "User-Agent" = "Mozilla/5.0" }
+}
+Import-Module $_hnModule -Force -DisableNameChecking
+# ──────────────────────────────────────────────────────────────────────────────
+
 # ── Variables ─────────────────────────────────────────────────────────────────
 $workDir = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
 
@@ -55,38 +64,20 @@ if (Test-Path $httpdConfPath) {
     Write-Host "[2.ps1:APACHE-httpd] vhosts are enabled." -ForegroundColor Green
 }
 
-$n = "`r`n"
-$localhostFallback  = "${n}<VirtualHost *:80>${n}"
-$localhostFallback += "    DocumentRoot `"$htdocsPath`"${n}"
-$localhostFallback += "    ServerName localhost${n}"
-$localhostFallback += "</VirtualHost>${n}"
-$vhostConfig  = "${n}# Custom Domain Automator: $baseDomain${n}"
-$vhostConfig += "<VirtualHost *:80>${n}"
-$vhostConfig += "    DocumentRoot `"$documentRoot`"${n}"
-$vhostConfig += "    ServerName $baseDomain${n}"
-$vhostConfig += "    ServerAlias $wwwDomain${n}"
-$vhostConfig += "    <Directory `"$documentRoot`">${n}"
-$vhostConfig += "        AllowOverride All${n}"
-$vhostConfig += "        Require all granted${n}"
-$vhostConfig += "    </Directory>${n}"
-if ($subPath -ne '') {
-    Write-Host "[2.ps1:VHOST] subpath detected: '/$subPath/', root will redirect to it" -ForegroundColor Gray
-    $vhostConfig += "    RedirectMatch ^/`$ /$subPath/${n}"
-}
-$vhostConfig += "</VirtualHost>${n}"
-
 $vhostsPath = "$apachePath\conf\extra\httpd-vhosts.conf"
 if (Test-Path $vhostsPath) {
     Write-Host "[2.ps1:VHOST-add] adding fallback-config..." -ForegroundColor Yellow
     if (!(Select-String -Path $vhostsPath -Pattern "ServerName localhost" -Quiet)) {
+        $n = "`r`n"
+        $localhostFallback  = "${n}<VirtualHost *:80>${n}"
+        $localhostFallback += "    DocumentRoot `"$htdocsPath`"${n}"
+        $localhostFallback += "    ServerName localhost${n}"
+        $localhostFallback += "</VirtualHost>${n}"
         Add-Content -Path $vhostsPath -Value $localhostFallback
     }
     Write-Host "[2.ps1:VHOST-add] added fallback-config." -ForegroundColor Green
     Write-Host "[2.ps1:VHOST-add] adding $baseDomain config..." -ForegroundColor Yellow
-    if (!(Select-String -Path $vhostsPath -Pattern ([regex]::Escape("ServerName $baseDomain")) -Quiet)) {
-        Add-Content -Path $vhostsPath -Value $vhostConfig
-        Write-Host "[2.ps1:VHOST-add] added $baseDomain (with www alias)." -ForegroundColor Green
-    } else { Write-Host "[2.ps1:VHOST-skip] vhost config for $baseDomain already exists." -ForegroundColor Yellow }
+    Add-HnHostEntry -Domain $baseDomain -DocRoot $documentRoot -HostsPath $hostsPath -VhostsPath $vhostsPath -SubPathRedirect $subPath
 } else { Write-Host "[2.ps1:VHOST-error] could not locate httpd-vhosts.conf at: $vhostsPath" -ForegroundColor Red; Exit 1 }
 
 Write-Host "[2.ps1:SYSTEM-dns] flushing dns cache..." -ForegroundColor Yellow
@@ -94,24 +85,6 @@ Clear-DnsClientCache
 Write-Host "[2.ps1:SYSTEM-dns] flush successful" -ForegroundColor Green
 
 Write-Host "[2.ps1:XAMPP-apache] apache restart required, restarting..." -ForegroundColor Cyan
-$ApacheService = Get-Service | Where-Object { $_.Name -like "Apache*" }
-if ($ApacheService) {
-    Write-Host "[2.ps1:XAMPP-apache] found service, restarting..." -ForegroundColor Yellow
-    try {
-        Restart-Service -Name $ApacheService.Name -Force -ErrorAction SilentlyContinue
-        Write-Host "[2.ps1:XAMPP-apache] service restarted." -ForegroundColor Green
-    } catch { Write-Host "[2.ps1:XAMPP-apache] failed to restart service, manually attempting to restart..." -ForegroundColor Yellow }
-} else {
-    $HttpdPath = Join-Path -Path $XamppInstallDir -ChildPath "apache\bin\httpd.exe"
-    if (Test-Path $HttpdPath) {
-        Write-Host "[2.ps1:XAMPP-apache] service not found, restarting via executable..." -ForegroundColor Yellow
-        Get-Process "httpd" -ErrorAction SilentlyContinue | Stop-Process -Force
-        Start-Sleep -Seconds 1
-        Start-Process -FilePath $HttpdPath -WindowStyle Hidden
-        Write-Host "[2.ps1:XAMPP-apache] process restarted." -ForegroundColor Green
-    } else {
-        Write-Host "[2.ps1:XAMPP-apache] could not locate httpd.exe at $HttpdPath" -ForegroundColor Red
-    }
-}
+Restart-Apache -XamppDir $XamppInstallDir
 
 Write-Host "[2.ps1:message] host cooked, deep fried even" -ForegroundColor Green

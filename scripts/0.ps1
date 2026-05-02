@@ -1,3 +1,12 @@
+# ── Module ────────────────────────────────────────────────────────────────────
+$_repoBase = "https://raw.githubusercontent.com/ketw/hostnet/main"
+$_hnModule = Join-Path $env:TEMP "hn.psm1"
+if (-not (Test-Path $_hnModule)) {
+    Invoke-RestMethod -Uri "$_repoBase/modules/hn.psm1" -OutFile $_hnModule -Headers @{ "User-Agent" = "Mozilla/5.0" }
+}
+Import-Module $_hnModule -Force -DisableNameChecking
+# ──────────────────────────────────────────────────────────────────────────────
+
 $uIdentity = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 $isAdmin = ($uIdentity).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 $isAlone = [string]::IsNullOrWhiteSpace($env:SETUP_WORKDIR)
@@ -97,27 +106,6 @@ Clear-DnsClientCache
 Write-Host "[0.ps1:SYSTEM-dns] flush successful" -ForegroundColor Green
 
 Write-Host "[0.ps1:XAMPP-apache] checking apache status..." -ForegroundColor Cyan
-$ApacheService = Get-Service | Where-Object { $_.Name -like "Apache*" }
-$HttpdPath = Join-Path -Path $XamppInstallDir -ChildPath "apache\bin\httpd.exe"
-if ($ApacheService) {
-    Write-Host "[0.ps1:XAMPP-apache] found service, restarting..." -ForegroundColor Yellow
-    try {
-        Restart-Service -Name $ApacheService.Name -Force -ErrorAction SilentlyContinue
-        Write-Host "[0.ps1:XAMPP-apache] service restarted." -ForegroundColor Green
-    } catch { Write-Host "[0.ps1:XAMPP-apache] failed to restart service, manually attempting to restart..." -ForegroundColor Yellow; }
-} elseif (Test-Path $HttpdPath) {
-    $httpdRunning = Get-Process "httpd" -ErrorAction SilentlyContinue
-    if ($httpdRunning) {
-        Write-Host "[0.ps1:XAMPP-apache] no service found, restarting process..." -ForegroundColor Yellow
-        $httpdRunning | Stop-Process -Force
-        Start-Sleep -Seconds 1
-        Start-Process -FilePath $HttpdPath -WindowStyle Hidden
-        Write-Host "[0.ps1:XAMPP-apache] process restarted." -ForegroundColor Green
-    } else {
-        Write-Host "[0.ps1:XAMPP-apache] apache is not running, skipping restart." -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "[0.ps1:XAMPP-apache] could not locate httpd.exe at $HttpdPath, apache may not be installed correctly." -ForegroundColor Red
-}
+Restart-Apache -XamppDir $XamppInstallDir
 
 Write-Host "[0.ps1:message] system sanitized" -ForegroundColor Green

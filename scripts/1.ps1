@@ -1,3 +1,12 @@
+# ── Module ────────────────────────────────────────────────────────────────────
+$_repoBase = "https://raw.githubusercontent.com/ketw/hostnet/main"
+$_hnModule = Join-Path $env:TEMP "hn.psm1"
+if (-not (Test-Path $_hnModule)) {
+    Invoke-RestMethod -Uri "$_repoBase/modules/hn.psm1" -OutFile $_hnModule -Headers @{ "User-Agent" = "Mozilla/5.0" }
+}
+Import-Module $_hnModule -Force -DisableNameChecking
+# ──────────────────────────────────────────────────────────────────────────────
+
 # ── Variables ─────────────────────────────────────────────────────────────────
 $workDir = if ($env:SETUP_WORKDIR) { $env:SETUP_WORKDIR } else { (Get-Location).Path }
 
