@@ -13,6 +13,7 @@ function Invoke-Download {
     param([string]$Uri, [string]$OutFile, [string]$Label, [string]$UserAgent = "Mozilla/5.0")
 
     $totalBytes = 0
+    
     try {
         $req = [System.Net.HttpWebRequest]::Create($Uri)
         $req.Method = "HEAD"
