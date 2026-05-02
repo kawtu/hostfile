@@ -114,7 +114,4 @@ if ($ApacheService) {
     }
 }
 
-$launchUrl = "http://$baseDomain"
-if ($subPath -ne '') { $launchUrl = "http://$baseDomain/$subPath/" }
-Start-Process $launchUrl
 Write-Host "[2.ps1:message] host cooked, deep fried even" -ForegroundColor Green
