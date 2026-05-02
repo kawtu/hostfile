@@ -177,9 +177,14 @@ if (-not $XamppInstallDir) {
             throw "[setup.ps1:XAMPP-download] failed to download, file was too small ($([math]::Round($fileSize/1MB,1))mb)"
         }
         Write-Host "[setup.ps1:XAMPP-install] installing XAMPP to C:\xampp..." -ForegroundColor Cyan
-        Start-Process -FilePath $InstallerPath -ArgumentList "--mode unattended", "--unattendedmodeui none", "--launchapps 0", "--prefix C:\xampp" -Wait
+        $installArgs = "--mode unattended --launchapps 0 --prefix `"C:\xampp`""
+        Start-Process -FilePath $InstallerPath -ArgumentList $installArgs -Wait -Verb RunAs
         if (Test-Path $InstallerPath) { Remove-Item $InstallerPath -Force }
         $XamppInstallDir = "C:\xampp"
+        $deadline = (Get-Date).AddSeconds(30)
+        while (-not (Test-Path "$XamppInstallDir\apache\bin\httpd.exe") -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 2
+        }
         if (-not (Test-Path "$XamppInstallDir\apache\bin\httpd.exe")) {
             throw "XAMPP install completed but apache was not found at $XamppInstallDir — installation may have failed."
         }
