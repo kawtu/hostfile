@@ -107,7 +107,9 @@ do {
 } while ([string]::IsNullOrWhiteSpace($inputUrl))
 if ($inputUrl -notmatch '^https?://') { $inputUrl = "https://$inputUrl" }
 Write-Host ""; $env:TARGET_URL = $inputUrl;
-$baseDomain    = ($inputUrl -replace '^www\.', '')
+$_uri      = [System.Uri]$inputUrl
+$baseDomain = ($_uri.Host -replace '^www\.', '')
+$subPath    = $_uri.AbsolutePath.Trim('/')
 Write-Host "[setup.ps1:SYSTEM@target] set to $($env:TARGET_URL)" -ForegroundColor Green
 
 $workDir = Join-Path $env:TEMP "setup_workspace"

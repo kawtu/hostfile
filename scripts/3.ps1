@@ -18,10 +18,25 @@ $externalRoot = "$htdocsPath\$baseDomain-external"
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ── Helper ────────────────────────────────────────────────────────────────────
+function Find-MirrorSource {
+    param([string]$MirrorOut, [string]$Domain)
+    foreach ($candidate in @("$MirrorOut\$Domain", "$MirrorOut\www.$Domain")) {
+        if (Test-Path $candidate) { return $candidate }
+    }
+    $subdirs = Get-ChildItem -Path $MirrorOut -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notmatch '^(hts-cache|hts-log)' }
+    foreach ($d in $subdirs) {
+        $hasFiles = Get-ChildItem -Path $d.FullName -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -match '\.(html?|css|js|php|aspx|png|jpg|pdf)$' } |
+            Select-Object -First 1
+        if ($hasFiles) { return $d.FullName }
+    }
+    return $null
+}
 function Invoke-Mirror {
     param([string]$Url, [string]$OutFolder, [string]$Depth = "1")
-    $args = @($Url, "-O", $OutFolder, "-w", "-r$Depth", "-%e0")
-    & $httrackExe $args | Out-Null
+    $htArgs = @($Url, "-O", $OutFolder, "-w", "-r$Depth", "-%e0")
+    & $httrackExe $htArgs 2>&1 | Out-Null
 }
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -109,10 +124,7 @@ if ($sameDomainLinks.Count -gt 0) {
         $mirrorOut = Join-Path $workDir "Mirrored_sd_$($baseDomain -replace '[^a-zA-Z0-9]','_')"
         if (Test-Path $mirrorOut) { Remove-Item $mirrorOut -Recurse -Force }
         Invoke-Mirror -Url $link -OutFolder $mirrorOut -Depth "1"
-        $srcPath = $null
-        foreach ($candidate in @("$mirrorOut\$baseDomain", "$mirrorOut\www.$baseDomain")) {
-            if (Test-Path $candidate) { $srcPath = $candidate; break }
-        }
+        $srcPath = Find-MirrorSource -MirrorOut $mirrorOut -Domain $baseDomain
         if (!$srcPath) { Write-Host "[3.ps1:SAME-DOMAIN] could not locate mirrored output for $link, skipping." -ForegroundColor Yellow; continue }
         Copy-Item -Path "$srcPath\*" -Destination $sdStaging -Recurse -Force
         $deployTarget = "$htdocsPath\$baseDomain"
@@ -142,10 +154,7 @@ if ($externalLinks.Count -gt 0) {
             $ext   = [System.IO.Path]::GetExtension($lu.AbsolutePath).ToLower()
             $depth = if ($ext -in @('.pdf','.png','.jpg','.jpeg','.gif','.svg','.webp','.zip','.mp4','.mp3')) { "0" } else { "1" }
             Invoke-Mirror -Url $link -OutFolder $mirrorOut -Depth $depth
-            $srcPath = $null
-            foreach ($candidate in @("$mirrorOut\$extDomain", "$mirrorOut\www.$extDomain")) {
-                if (Test-Path $candidate) { $srcPath = $candidate; break }
-            }
+            $srcPath = Find-MirrorSource -MirrorOut $mirrorOut -Domain $extDomain
             if (!$srcPath) { Write-Host "[3.ps1:EXTERNAL] could not locate mirrored output for $link, skipping." -ForegroundColor Yellow; continue }
             $deployTarget = $extDocRoot
             if (!(Test-Path $deployTarget)) { New-Item -ItemType Directory -Path $deployTarget | Out-Null }
